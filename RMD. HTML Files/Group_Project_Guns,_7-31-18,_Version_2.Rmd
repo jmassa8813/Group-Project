@@ -1,0 +1,370 @@
+---
+title: "More Guns, Less Crime?"
+author: "Viola Group"
+date: "7/30/2018"
+output: html_document
+---
+
+```{r setup}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE
+)
+options(scipen =10, show.signif.stars = FALSE)
+```
+
+#Guns dataset from the "AER"" package.      
+* **Dataset is a balanced panel of data on 50 US states, plus the District of Columbia (for a total of 51 states), by year for 1977–1999, and contains 1,173 observations on 13 variables. The variables are:**
+    + ***state:*** factor indicating state.
+    + ***year:*** factor indicating year.
+    + ***violent:*** violent crime rate (incidents per 100,000 members of the population).
+    + ***murder:*** murder rate (incidents per 100,000).
+    + ***robbery:*** robbery rate (incidents per 100,000).
+    + ***prisoners:*** incarceration rate in the state in the previous year (sentenced prisoners per 100,000 residents;value for the previous year).
+    + ***afam:*** percent of state population that is African-American, ages 10 to 64.
+    + ***cauc:*** percent of state population that is Caucasian, ages 10 to 64.
+    + ***male:*** percent of state population that is male, ages 10 to 29.
+    + ***population:*** state population, in millions of people.
+    + ***income:*** real per capita personal income in the state (US dollars).
+    + ***density:*** population per square mile of land area, divided by 1,000.
+    + ***law:*** factor. Does the state have a shall carry law in effect in that year?
+
+
+##Objective: Identify if having more guns, reduces violence.
+
+
+**Install and load the AER Package**
+```{r}
+#install.packages("AER", repos = "http://cran.us.r-project.org", type = "source")
+library("AER")
+```
+
+**Load the *Guns* dataset from the AER Package**
+```{r}
+data("Guns")
+```
+
+  
+**Examine the structure and summary of the *Guns* dataset**
+```{r}
+str(Guns)  #print the structure
+
+summary(Guns)  #Identify the missing values
+
+```
+**Explanation:** Based on the data summary, none of the variables appear to have missing values.
+
+**Identify the column number associated with each variable**
+```{r}
+names(Guns)
+```
+  
+##Explore the distribution of the violent crime rate
+```{r}
+x <- sort(Guns$violent)
+m <- mean(Guns$violent)
+std <- sd(Guns$violent)
+```
+  
+**Plots of the violent crime rate**
+```{r}
+old <- par(mfrow=c(2,2))
+#histogram
+hist(Guns$violent, freq=FALSE)
+curve(dnorm(x, mean=m, sd=std), col="darkblue", lwd=0.25,add = TRUE)
+#density plot
+plot(density(Guns$violent))
+curve(dnorm(x, mean=m, sd=std), col="darkblue", lwd=0.25,add = TRUE)
+#sortplot
+plot(sort(Guns$violent))
+#QQ-Plot
+qqnorm(Guns$violent)
+qqline(Guns$violent, col="blue")
+par(old)
+```
+**Explanation** After examining the above plots, the *violent* variable does not appear to be normally distributed.  In the histogram, the distribution of the *violent* variable deviates from the normal distribution.  Aditionally, the actual values of the *violent* varibale do not adhere to the blue QQ-line on the the QQ-Plot.  The *violent* variable is skewed to the right (positively skewed) and the mean (503.074) > median (443).  On the Sort Plot there appears to be a few clusters on the right side of the plot, where the violent crime rate is high.  Based on the fact that the *violent* variable is skewed to the right I would consider the use a “log()” transformation on this variable. The "log()" transformation could reduce the skewness, which in turn could make it easier to interpret whether or not a relationship exist between variables that might not have otherwise been obvious.
+
+##Examine the Scatterplot Matrix of the dataset
+  
+**Plot the scatterplot matrix**
+```{r}
+pairs(~ law + year + murder + robbery + prisoners + afam + cauc + male + population + income + density + state + violent, data=Guns)
+```
+**Explanation:** There appears to be a positive relationship between the dependent variable *violent* and the independent variables *murder*, *robbery*, *prisoner*, *afam*, and *density* as well as a negative relationship between *violent* and *cauc*.  However its difficult to examine the variables using the pairs function, therefore lets try the ggpairs function from GGally package.
+
+**Before you can use the ggpairs function, create a duplicate dataset called Guns1 and convert the factor variables *state* and *year* into numerics because factors with levels greater than 15, will cause a processing error.**
+```{r}
+Guns1 <-Guns 
+Guns1$state <- as.numeric(Guns1$state)
+Guns1$year <- as.numeric(Guns1$year)
+```
+
+**Confirm the variables were converted**
+```{r}
+str(Guns1)
+summary(Guns1)
+```
+
+
+**Use fancy scatterplot matrix, but use Guns1 to avoid a processing error.**
+```{r}
+library("GGally") #load GGally package
+```
+```{r}
+ggpairs(Guns1, columns = c(13, 1, 3:12, 2))
+```
+
+**Add colors to the scatterplot matrix to see how the factor variable *law* effects other variables.**
+```{r}
+ggpairs(Guns1, columns = c(13, 1, 3:12, 2), mapping = aes(color = law))
+```
+**Explanation** Based on the ggpairs scatterplot, the variables *murder* and *robbery* have the strongest positive linear relationship with the violent crime rate, with a correlation value of 0.827 and 0.907 respectively.  Considering these variables are components of the violent crime rate, we expected there to be high correlation values.  However with that being said, these variables are more of a subcategory of violent crimes and therefore aren't good predictors for a linear model.  Other variables that showed a high correlation value were prisoners (0.703), density (0.665), afam (0.57), cauc(-0.573), and income (0.408).  The law variable was also a good indicator because the box plot showed that on average states that have a shall carry law in effect have a lower violent crime rate as well as as a lower murder and robbery rate.
+  
+##Examination of Simple Regression models
+
+**Model (m1): Examine the relationship between the violent crime rate and having a shall carry law in effect**
+```{r}
+m1 <- lm(violent~ law, data = Guns)
+summary(m1)
+```
+**Explanation:**  The summary of model m1 identifies that States that have a shall carry law in effect will have an average violent crime rate of 381.05 (542.24 - 161.19).  States that don't have a shall carry law in effect will have an average violent crime rate of 542.24.
+
+**Model (m2): Examine the relationship between the violent crime rate and the incarceration rate in the state in the previous year.**
+```{r}
+m2 <- lm(violent~ prisoners, data = Guns)
+summary(m2)
+```
+**Explanation:**  The summary of model m2 identifies that a 1% increase in the incarceration rate in the state in the previous year will increase the average violent crime rate by 1.31302 .  
+
+**Model (m3): Examine the relationship between the violent crime rate and the % of state population that is male, ages 10 to 29.**
+```{r}
+m3 <- lm(violent~ male, data = Guns)
+summary(m3)
+```
+**Explanation:**  The summary of model m3 identifies that a 1% increase in the state population that is male, ages 10 to 29, will decrease the average violent crime rate by 32.739.
+
+**Model (m4): Examine the relationship between the violent crime rate and the real per capita personal income in the state (US Dollars).**
+```{r}
+m4 <- lm(violent~ income, data = Guns)
+summary(m4)
+```
+**Explanation:**  The summary of model m4 identifies that as the real per capita personal income in the state goes up by $1, the average violent crime rate will increase by 0.053387.**
+  
+##Examination of multipe Regression models
+
+**First examine the model with all variables as predictors except the variables *murder* and *robbery* because they are components of the violent crime rate**
+
+**Use the dataset "Guns1", which convert the factor variables *state* and *year* into numerics.  Only factor variable to remain is *law*.**
+```{r}
+m5 <- lm(violent~law + prisoners+ density + income + population + afam + cauc + male + state + year, data = Guns1)
+summary(m5)
+```
+
+**Examine the coefficient estimates with a particular focus on *lawyes*.**
+```{r}
+coef(m5)
+```
+**Explanation:** Based on this model; states that have a shall carry law in effect are more likely to have a lower violent crime rate.  Holding all other variables equal, a state without a shall carry law on average will have 58.04407 more incidents per 100,000 members of the population.
+
+###How well does the Model Fit?
+
+**Lets look at the Model Fit (Coefficient of Determination)**
+```{r}
+summary(m5)$r.square
+```
+**Explanation:**  The model explains approximately 74.28% of the variability of the response data around its mean.
+
+**Fitted Plot**
+```{r}
+library(ggplot2) #load ggplot 2 package
+qplot(m5$fitted.value, violent, data=Guns1) +
+geom_abline(intercept = 0, slope = 1, color="hot pink") +
+ggtitle("Fit Plot")
+```
+**Explanation:** The plot shows that the actual values fluctuate fairly significantly from the fitted values(pink reference line).
+
+**Residuals vs. Fitted**
+```{r}
+ggplot(m5, aes(.fitted, .resid)) +
+geom_point() +
+geom_hline(yintercept=0, color="dark blue", linetype="dashed") +
+ggtitle("Residual Plot")
+```
+**Explanation:** The Residual plot shows that a majority of the observed values fall within +/-500 of the fitted values.  However this could be considered a substantialy deviation from the fitted values.  Therefore lets examine if a log transformation would be useful.
+
+**Create another model using log(violent)**
+```{r}
+m6 <- lm(log(violent)~law + prisoners+ density + income + population + afam + cauc + male + state + year, data = Guns1)
+summary(m6)
+```
+###How well does the log transformed Model Fit?
+
+**Lets look at the log transformed Model Fit (Coefficient of Determination)**
+```{r}
+summary(m6)$r.square
+```
+**Explanation:**  The model explains approximately 59.32% of the variability of the response data around its mean.
+
+**Log Transformation Fitted Plot**
+```{r}
+qplot(m6$fitted.value, violent, data=Guns1) +geom_smooth() +ggtitle("Fit Plot log transformation")
+```
+**Explanation:** The plot shows that the actual values fluctuate fairly significantly from the fitted values(blue reference line).
+
+**Log Transformation Residuals vs. Fitted**
+```{r}
+ggplot(m6, aes(.fitted, .resid)) +
+geom_point() +
+geom_hline(yintercept=0, color="dark blue", linetype="dashed") +
+ggtitle("Log Transformation Residual Plot")
+```
+**Explanation:** The above plot is easier to read than the previous model (m5).  The y-axis, which shows the .resid is shown in Z-scores with a majority of the data falling between +/- 2 standard deviations from the mean.  Moving forward we will use the log transformation of the violent variable to make it easier to interpret the data.
+
+
+**some values fall outside of the observed values fall outside of the range and therefore its in our best interest to examine smaller models that could dimish the variability further.**
+
+##Hypothesis Testing
+
+  
+###Comparison 1
+**Create a linear model with all of the same variables except the *year* variable as predictors of the log transformation of the violent crime rate.** 
+
+```{r}
+m7 <- lm(log(violent)~law + prisoners+ density + income + population + afam + cauc + male + state, data = Guns1)
+summary(m7)
+```
+  
+* **Compare two models:**   
+    + *Model 7: log(violent) ~ law + prisoners + density + income + population + afam + cauc + male + state*  
+    + *Model 6: log(violent)~ law + prisoners + density + income + population + afam + cauc + male + state + year*
+    
+**Run anova function**
+```{r}
+tab2 <- anova(m7, m6)
+tab2
+```
+**Explanation:** The F-ratio 31.848 is large enough and the p-value 0.00000002094, is smaller than  $\alpha$ = .05; therefore the bigger Model (m6) is better.  Based on this information you can conclude that the *year* variable affect the violent crime rate.
+    
+###Comparison 2
+**Create a linear model with all of the same variables except the *state* variable as predictors of the log transformation of the violent crime rate.** 
+
+```{r}
+m8 <- lm(log(violent)~law + prisoners+ density + income + population + afam + cauc + male + year, data = Guns1)
+summary(m8)
+```
+  
+* **Compare two models:**   
+    + *Model 8: log(violent) ~ law + prisoners + density + income + population + afam + cauc + male + year*  
+    + *Model 6: log(violent)~ law + prisoners + density + income + population + afam + cauc + male + state + year*
+    
+**Run anova function**
+```{r}
+tab3 <- anova(m8, m6)
+tab3
+```
+**Explanation:** The F-ratio 44.667 is large enough and the p-value 0.00000000003617, is smaller than  $\alpha$ = .05; therefore the bigger Model (m6) is better.  Based on this information you can conclude that the *state* variable affect the violent crime rate.
+
+###Comparison 3
+**Create a linear model with all of the same variables except the *male* variable as predictors of the log transformation of the violent crime rate.** 
+
+```{r}
+m9 <- lm(log(violent)~law + prisoners+ density + income + population + afam + cauc + state + year, data = Guns1)
+summary(m9)
+```
+  
+* **Compare two models:**   
+    + *Model 9: log(violent) ~ law + prisoners + density + income + population + afam + cauc + state + year*  
+    + *Model 6: log(violent)~ law + prisoners + density + income + population + afam + cauc + male + state + year*
+    
+**Run anova function**
+```{r}
+tab4 <- anova(m9, m6)
+tab4
+```
+**Explanation:** The F-ratio 17.956 is large enough and the p-value 0.00002439, is smaller than  $\alpha$ = .05; therefore the bigger Model (m6) is better.  Based on this information you can conclude that the *male* variable affect the violent crime rate.
+
+###Comparison 4
+**Create a linear model with all of the same variables except the *density* variable as predictors of the log transformation of the violent crime rate.** 
+
+```{r}
+m10 <- lm(log(violent)~law + prisoners + income + population + afam + cauc + male+ state + year, data = Guns1)
+summary(m10)
+```
+  
+* **Compare two models:**   
+    + *Model 10: log(violent) ~ law + prisoners + income + population + afam + cauc + male + state + year*  
+    + *Model 6: log(violent)~ law + prisoners + density + income + population + afam + cauc + male + state + year*
+    
+**Run anova function**
+```{r}
+tab5 <- anova(m10, m6)
+tab5
+```
+**Explanation:** The F-ratio 0.2101 is small and the p-value 0.6468, is greater than  $\alpha$ = .05; therefore the smaller Model (m10) is better.  Based on this information you can conclude that the *density* variable does not affect the violent crime rate.
+
+###Comparison 5
+**Create a linear model with all of the same variables except the *density* and *income* variables as predictors of the log transformation of the violent crime rate.** 
+
+```{r}
+m11 <- lm(log(violent)~law + prisoners + population + afam + cauc + male+ state + year, data = Guns1)
+summary(m11)
+```
+  
+* **Compare two models:**   
+    + *Model 11: log(violent) ~ law + prisoners + population + afam + cauc + male + state + year*  
+    + *Model 10: log(violent) ~ law + prisoners + income + population + afam + cauc + male + state + year*
+    
+**Run anova function**
+```{r}
+tab6 <- anova(m11, m10)
+tab6
+```
+**Explanation:** The F-ratio 0.1322 is small and the p-value 0.7162, is greater than  $\alpha$ = .05; therefore the smaller Model (m11) is better.  Based on this information you can conclude that the *income* variable does not affect the violent crime rate either.
+
+###Comparison 6
+**Create a linear model with all of the same variables except the *density*,*income*, and *population variables as predictors of the log transformation of the violent crime rate.** 
+
+```{r}
+m12 <- lm(log(violent)~law + prisoners + afam + cauc + male+ state + year, data = Guns1)
+summary(m12)
+```
+  
+* **Compare two models:**   
+    + *Model 12: log(violent) ~ law + prisoners + afam + cauc + male + state + year*  
+    + *Model 11: log(violent) ~ law + prisoners + population + afam + cauc + male + state + year* 
+    
+**Run anova function**
+```{r}
+tab7 <- anova(m12, m11)
+tab7
+```
+**Explanation:** The F-ratio 311.75 is large and the p-value 2.2e-16, is smaller than  $\alpha$ = .05; therefore the bigger Model (m11) is better.  Based on this information you can conclude that the *population* variable affect the violent crime rate.
+
+
+###Comparison 7
+  
+**Create a linear model with law as the only predictor of the log transformation of the violent crime rate.** 
+
+```{r}
+m13 <- lm(log(violent)~law, data = Guns1)
+summary(m13)
+```
+  
+* **Compare two models:**   
+    + *Model 13: log(violent) ~ law*  
+    + *Model 11: log(violent) ~ law + prisoners + population + afam + cauc + male + state + year* 
+    
+**Run anova function**
+```{r}
+tab8 <- anova(m13, m11)
+tab8
+```
+**Explanation:** The F-ratio 206.97 is large and the p-value 2.2e-16, is smaller than  $\alpha$ = .05; therefore the bigger Model (m12) is better.  Based on this information you can conclude that the variables *prisoners*, *population*, *afam*, *cauc*, and *male* affect the violent crime rate.
+
+###Visualization
+```{r}
+library("lattice")
+xyplot(log(violent) ~ as.numeric(as.character(year)) | state , data = Guns, type = "l")
+```
+

@@ -1,0 +1,409 @@
+---
+title: "Violas Group Presentation V1"
+author: "Joe, Jason, Pam"
+date: "August 4, 2018"
+output: html_document
+---
+```{r}
+author('Group Project')
+```
+
+#Review the Guns dataset from the "AER"" package.      
+* **Dataset is a balanced panel of data on 50 US states, plus the District of Columbia (for a total of 51 states), by year for 1977?????1999, and contains 1,173 observations on 13 variables. The variables are:**
+    + ***state:*** factor indicating state.
+    + ***year:*** factor indicating year.
+    + ***violent:*** violent crime rate (incidents per 100,000 members of the population).
+    + ***murder:*** murder rate (incidents per 100,000).
+    + ***robbery:*** robbery rate (incidents per 100,000).
+    + ***prisoners:*** incarceration rate in the state in the previous year (sentenced prisoners per 100,000 residents;value for the previous year).
+    + ***afam:*** percent of state population that is African-American, ages 10 to 64.
+    + ***cauc:*** percent of state population that is Caucasian, ages 10 to 64.
+    + ***male:*** percent of state population that is male, ages 10 to 29.
+    + ***population:*** state population, in millions of people.
+    + ***income:*** real per capita personal income in the state (US dollars).
+    + ***density:*** population per square mile of land area, divided by 1,000.
+    + ***law:*** factor. Does the state have a shall carry law in effect in that year?
+
+
+##Objective: Using the data collected see if we can Identify a model that helps best predict the violence rate.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, include=FALSE}
+#install.packages("AER", repos = "http://cran.us.r-project.org", type = "source")
+options(warn=-1)
+library(AER)
+data("Guns")
+names(Guns)
+```
+
+Review a structure of the data
+========================================================
+
+```{r, echo=FALSE}
+summary(Guns)
+```
+
+Review data visually
+========================================================
+```{r, echo=FALSE, fig1, fig.height = 6, fig.width = 9, fig.align = "center"}
+x <- sort(Guns$violent)
+med <- median(Guns$violent)
+m <- mean(Guns$violent)
+std <- sd(Guns$violent)
+
+oldpar <- par(mfrow=c(2,2))
+#Price Histogram
+hist(Guns$violent,main="Histogram", freq=FALSE)
+curve(dnorm(x, mean=m, sd=std), col="darkblue", lwd=0.25,add = TRUE)
+
+#Density Plot
+plot(density(Guns$violent),main="Density Plot")
+curve(dnorm(x, mean=m, sd=std), col="darkblue", lwd=0.25,add = TRUE)
+
+#Sortplot
+plot(sort(Guns$violent),main="Sort Plot")
+
+#QQ-Plot
+qqnorm(Guns$violent)
+qqline(Guns$violent, col="blue")
+par(oldpar)
+
+```
+
+#The violent variable does not appear to be normally distributed
+* Histogram, the distribution of the violent variable deviates from the normal distribution
+    + Doesn't adhere to the blue QQ-line on the the QQ-Plot. 
+    + Violent variable is skewed to the right (positively) and the mean (503.074) > median (443)
+* Sort Plot there appears to be a few clusters on the right side of the plot, where the violent crime rate is high
+* Consider the use a ?log()? transformation on this variable possibly reduce the skewness
+* Potentially make it easier to interpret whether or not a relationship exist between variables that might not have otherwise been obvious.
+
+
+```{r, include=FALSE}
+library("GGally")
+```
+
+
+Scatterplot
+========================================================
+```{r, echo=FALSE, fig2, fig.height = 6, fig.width = 9, fig.align = "center"}
+ggpairs(Guns, columns = c(13, 3:11, 2), mapping = aes(color = law),lower=list(combo=wrap("facethist", binwidth=10)))
+```
+
+* The variables murder and robbery have the strongest positive linear relationship with the violent crime rate, with a correlation value of 0.827 and 0.907
+    + Considering these variables are components of the violent crime rate, we expected there to be high correlation values
+    + These variables are more of a subcategory of violent crimes and therefore aren't good predictors for a linear model
+* Other variables that showed a high correlation value were prisoners (0.703), density (0.665), afam (0.57), cauc(-0.573), and income (0.408)
+    + The law variable was also a good indicator because the box plot showed that on average states that have a shall carry law in effect have a lower violent crime rate as well as as a lower murder and robbery rate.
+
+
+Fit Plot Original Model (mOrig)
+========================================================
+```{r, echo=FALSE, fig3, fig.height = 6, fig.width = 9, fig.align = "center"}
+mOrig <- lm(violent~., data = Guns)
+
+library(ggplot2) #load ggplot 2 package
+
+plot1 <- qplot(mOrig$fitted.value, violent, data=Guns) +
+geom_abline(intercept = 0, slope = 1, color="hot pink") +
+ggtitle("Fit Plot")
+plot2 <- ggplot(mOrig, aes(.fitted, .resid)) +
+geom_point() +
+geom_hline(yintercept=0, color="dark blue", linetype="dashed") +
+ggtitle("Residual Plot")
+
+library(gridExtra)
+grid.arrange(plot1, plot2, ncol = 2)
+```
+
+* The Fit Plot shows that the actual values fluctuate fairly significantly from the fitted values(pink reference line)
+* The Residual plot shows that a majority of the observed values fall within +/-500 of the fitted values
+    + This could be considered a substantial deviation from the fitted values
+    + Next lets examine if a log transformation or box-cox transformation would be useful
+
+
+Log Transformation Fitted Plot & Transformation Residuals vs. Fitted (mLog)
+========================================================
+```{r, echo=FALSE, fig4, fig.height = 6, fig.width = 9, fig.align = "center"}
+mLog <- lm(log(violent)~., data = Guns)
+Plot1 <- qplot(mLog$fitted.value, violent, data=Guns) +geom_smooth() +ggtitle("Fit Plot log transformation")
+
+plot2 <- ggplot(mLog, aes(.fitted, .resid)) +
+geom_point() +
+geom_hline(yintercept=0, color="dark blue", linetype="dashed") +
+ggtitle("Log Transformation Residual Plot")
+
+grid.arrange(plot1, plot2, ncol=2)
+```
+
+* The Log Transformed Fit Plot shows that the actual values fluctuate fairly significantly from the fitted values(blue reference line).
+* The Transformed Fit Plot vs Residual Plot is easier to read than the previous model (mOrig)
+    + Y-axis, which shows the .resid is shown in Z-scores with a majority of the data falling between +/- 1 standard deviations from the mean
+    + Moving forward we will use the log transformation of the violent variable to make it easier to interpret the data
+
+
+Box-Cox Transformation
+========================================================
+```{r, echo = FALSE}
+library(car)
+(lambda <- powerTransform(mOrig))
+```
+
+
+```{r, include=FALSE}
+lam <- lambda$lambda
+mBC <- lm(violent^lam ~ ., Guns)
+```
+
+
+Box-Cox Transformation Fitted Plot & Transformation Residuals vs. Fitted (mBC)
+========================================================
+```{r, echo = FALSE, fig5, fig.height = 6, fig.width = 9, fig.align = "center", message=FALSE}
+plot1 <- qplot(mBC$fitted.value, violent, data=Guns) +geom_smooth() + ggtitle("Fit Plot Box-Cox Transformation")
+
+plot2 <- ggplot(mBC, aes(.fitted, .resid)) +
+geom_point() +
+geom_hline(yintercept=0, color="dark blue", linetype="dashed") +
+ggtitle("Box-Cox Transformation Residual Plot")
+
+grid.arrange(plot1, plot2, ncol = 2)
+```
+
+
+Normal QQ-plots for detecting non normality
+========================================================
+```{r, echo = FALSE, fig6, fig.height = 6, fig.width = 9, fig.align = "center"}
+modmOrig <- fortify(mOrig)
+modmLog <- fortify(mLog)
+modmBC <- fortify(mBC)
+
+p1 <- qplot(sample = scale(.resid), data = modmOrig) + geom_abline(intercept = 0,
+slope = 1, color = "red") + labs(title = "Normal QQ-Plot - Untransformed violent", y = "Residuals")
+
+p2 <- qplot(sample = scale(.resid), data = modmLog) + geom_abline(intercept = 0,
+slope = 1, color = "red") + labs(title = "Normal QQ-Plot - Log Tranformed violent", y = "Residuals")
+
+p3 <- qplot(sample = scale(.resid), data = modmBC) + geom_abline(intercept = 0,
+slope = 1, color = "red") + labs(title = "Normal QQ-Plot - Box-Cox", y = "Residuals")
+
+grid.arrange(p1, p2, p3, nrow = 3)
+```
+Although there is not much seperation the Box-Cox Tansformed model seems to fit the best
+
+
+Histogram
+========================================================
+```{r, echo = FALSE, fig7, fig.height = 6, fig.width = 9, fig.align = "center", message=FALSE}
+p4 <- qplot(scale(.resid), data = modmOrig, geom = "blank") + geom_line(aes(y = ..density..,
+colour = "Empirical"), stat = "density") + stat_function(fun = dnorm, aes(colour = "Normal")) + geom_histogram(aes(y = ..density..), alpha = 0.4) + scale_colour_manual(name = "Density", values = c("red", "blue")) + theme(legend.position = c(0.85, 0.85)) + labs(title = "Untransformed violent", y = "Residuals")
+
+p5 <- qplot(scale(.resid), data = modmLog, geom = "blank") + geom_line(aes(y = ..density..,
+colour = "Empirical"), stat = "density") + stat_function(fun = dnorm, aes(colour = "Normal"))+ geom_histogram(aes(y = ..density..), alpha = 0.4) + scale_colour_manual(name = "Density", values = c("red", "blue")) + theme(legend.position = c(0.85, 0.85)) + labs(title = "Log Tranformed violent", y = "Residuals")
+
+p6 <- qplot(scale(.resid), data = modmBC, geom = "blank") + geom_line(aes(y = ..density..,
+colour = "Empirical"), stat = "density") + stat_function(fun = dnorm, aes(colour = "Normal"))+ geom_histogram(aes(y = ..density..), alpha = 0.4) + scale_colour_manual(name = "Density", values = c("red", "blue")) + theme(legend.position = c(0.85, 0.85)) + labs(title = "Box-Cox Tranformed violent", y = "Residuals")
+grid.arrange(p4, p5, p6, nrow = 3)
+```
+The residuals of the Box-Cox Transformed model from the above plots appears to have the most normally distributed histogram
+
+
+Shapiro test of Normality
+========================================================
+```{r, echo = FALSE}
+a <- shapiro.test(residuals(mOrig))
+b <- shapiro.test(residuals(mLog))
+c <- shapiro.test(residuals(mBC))
+e <- matrix(c(a$statistic,b$statistic,c$statistic, a$p.value,b$p.value,c$p.value),ncol=3,byrow=TRUE)
+colnames(e) <- c("Shapiro(mOrig)","Shapiro(mLog)","Shapiro(mBC)")
+rownames(e) <- c("W","p-value")
+(e <- as.table(e))
+```
+* The Shapiro-Wilk test indicates the Pearson correlation between the residuals and the normal quantiles, W is equal to:
+    + 0.97023 untransformed model
+    + 097727 log-transformed model
+    + 0.98664 box-cox transformed model
+
+
+**Based on our analysis we will look at the box-cox transformed model and log transformed model further with a Stepwise Regression**
+
+
+Stepwise Regression Box Cox Model
+========================================================
+```{r, echo=FALSE, print=mBCStep}
+mBCStep <- step(mBC)
+
+```
+```{r fig.height=8, fig.width=8}
+summary(mBCStep)
+```
+
+From the stepwise regression of the Box Cox Model we see that cauc, density, and income should be removed from the data to create a globally optimal model
+
+
+Stepwise Regression Log Model
+========================================================
+```{r, echo=FALSE}
+mLogStep <- step(mLog)
+```
+From the stepwise regression of the Log Model we see that murder, density, population, income, and afam should be removed from the data to create a globally optimal model
+
+
+Compare Coefficients of the three models
+========================================================
+```{r, echo = FALSE}
+compareCoefs(mBC, mBCStep, mLogStep, se = FALSE)
+```
+As you can see the larger model model mBC has larger standard errors then the smaller model mBCStep, which has gone through the stepwise regression
+
+  
+P-Value of the Partial F-test Box Cox Model and Stepwise Box Cox Model
+========================================================
+```{r, echo = FALSE}
+anova(mBC, mBCStep)
+```
+The results produced by the anova function show a non-significant result (p-value = 0.6224).  Therefore we should reject the Box-Cox transformed larger model (mBC) and move forward with the Box-Cox transformed smaller model (mBCStep).
+
+
+P-Value of the Partial F-test Log Model and Stepwise Log Model
+========================================================
+```{r, echo = FALSE}
+anova(mLog, mLogStep)
+```
+WHAT DO WE DO HERE????
+
+
+Checking for any influential points that are controlling the results
+========================================================
+```{r, echo=FALSE, fig8, fig.height = 6, fig.width = 9, fig.align = "center"}
+library(car)
+influencePlot(mBC, id.method=cooks.distance(mBC), id.n=4)
+```
+Although point 189 seems large, both the CookD and Hat value are low so this varaible isn't controlling the results
+
+
+Transformation Check
+========================================================
+```{r, echo=FALSE, fig9, fig.height = 6, fig.width = 9, fig.align = "center"}
+Guns1 <- Guns
+Guns1$state <- as.numeric(Guns1$state)
+Guns1$year <- as.numeric(Guns1$year)
+Guns1$law <- as.numeric(Guns1$law)
+Guns1$prisoners <- as.numeric(Guns1$prisoners)
+
+stripchart(data.frame(scale(Guns1)), 
+           vertical = TRUE, 
+           method = "jitter")
+```
+After looking at the scaled scatterplot of that data we determine that cauc needs to be transformed
+
+
+
+Stepwise regression with cauc normalized with log
+========================================================
+```{r, echo = FALSE}
+mLogCauc <- lm(violent ~ year + 
+           murder + 
+           robbery + 
+           prisoners + 
+           afam + 
+           log(cauc) + 
+           male +
+           population +
+           income +
+           density +
+           state +
+           law, 
+         data = Guns)
+mLogCauc <- step(mLogCauc)
+```
+
+* We transform cauc to a log(cauc)
+    + After running the linear model we now run the Stepwise Regression
+    + The Stepwise regression ended up still removing cauc so we will disregard this model
+
+
+```{r, include=FALSE}
+library(DAAG)
+```
+
+
+Cross-Validation for Linear Models
+========================================================
+```{r, echo = FALSE, fig10, fig.height = 6, fig.width = 9, fig.align = "center"}
+seed <- round(runif(1, min=0, max=100))
+
+CVlm(data = Guns, 
+     form.lm=mBCStep, 
+     m=3, 
+     printit=F)
+```
+
+
+Cross-Validation for Linear Models against 10 seeds each
+========================================================
+```{r, echo = FALSE, fig11, fig.height = 6, fig.width = 9, fig.align = "center"}
+df <- data.frame(mse.mOrig=NULL, 
+                 mse.mLog=NULL, 
+                 mse.mBCStep=NULL,
+                 mse.mBC=NULL,
+                 mse.mLogStep=NULL)
+for (i in 1:10) {
+  seed <- round(runif(1, min=0, max=100))
+  oldpar <- par(mfrow=c(1,5))
+  mse.mOrig <- CVlm(data = Guns, 
+               form.lm=mOrig, 
+               m=4, 
+               seed=seed, 
+               printit=F,
+               main = "mOrig")
+  mse.mLog <- CVlm(data = Guns, 
+               form.lm=mLog, 
+               m=4, 
+               seed=seed, 
+               printit=F,
+               main = "mLog")
+  mse.mBCStep <- CVlm(data = Guns, 
+               form.lm=mBCStep, 
+               m=4, 
+               seed=seed, 
+               printit=F,
+               main = "mBCStep")
+  mse.mBC <- CVlm(data = Guns, 
+               form.lm=mBC, 
+               m=4, 
+               seed=seed, 
+               printit=F,
+               main = "mBC")
+  mse.mLogStep <- CVlm(data = Guns, 
+               form.lm=mLogStep, 
+               m=4, 
+               seed=seed, 
+               printit=F,
+               main = "mLogStep")
+  par(oldpar)
+  df.temp <- data.frame(mse.mOrig=attr(mse.mOrig, "ms"),
+                        mse.mLog=attr(mse.mLog, "ms"),
+                        mse.mBCStep=attr(mse.mBCStep, "ms"),
+                        mse.mBC=attr(mse.mBC, "ms"),
+                        mse.mLogStep=attr(mse.mLogStep, "ms"))
+  df <- rbind(df,df.temp)
+}
+```
+
+```{r, echo = FALSE}
+df
+```
+
+*Conclusion*
+========================================================
+Based on the cross-validation model and the Coefficients comparison above we determine that the Log transformation optimized by the Stepwise function is the optimal model
+
+
+
+```{r finish, include=FALSE}
+options(warn = 0)
+```
